@@ -1,0 +1,352 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// === AUTH ===
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("admin")
+  image     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  email     String
+  name      String
+  role      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("sessions")
+}
+
+// 1. DATA MOBIL & STNK
+model Car {
+  id                  String         @id @default(uuid())
+  jenisMobil          String
+  transmisi           String
+  tahun               Int
+  platMobil           String         @unique
+  masaBerlakuStnk     DateTime?
+  stnkUrl             String?
+  hargaPerpanjangStnk Decimal        @db.Decimal(12, 2)
+
+  carPosition         CarPosition?
+  maintenances        Maintenance[]
+  tireOilRecord       TireOilRecord?
+  contracts           Contract[]
+  financing           CarFinancing?
+  insurance           CarInsurance?
+  driverLogs          DriverLog[]
+  etleViolations      EtleViolation[]
+
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@map("cars")
+}
+
+// 2. DATA SUPIR (MTH & TETAP) + JADWAL GAJIAN
+model Driver {
+  id            String      @id @default(uuid())
+  noUrut        Int?
+  namaSupir     String
+  noHp          String?
+  status        DriverType  @default(MTH)
+  tanggalGajian Int?
+  gajiPokok     Decimal     @db.Decimal(12, 2) @default(0)
+
+  driverLogs    DriverLog[]
+  carPositions  CarPosition[]
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@map("drivers")
+}
+
+enum DriverType {
+  MTH
+  TETAP
+}
+
+// 2a. DATA POSISI MOBIL
+model CarPosition {
+  id        String   @id @default(uuid())
+  carId     String   @unique
+  car       Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  userPosisi String?
+  driverId   String?
+  driver     Driver?  @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  updatedAt DateTime @updatedAt
+
+  @@map("car_positions")
+}
+
+// 4. DAFTAR MAINTENANCE & SERVIS
+model Maintenance {
+  id            String   @id @default(uuid())
+  tanggal       DateTime
+  carId         String
+  car           Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  bengkel       String
+  bank          String?
+  namaPenerima  String?
+  noRekening    String?
+
+  isOr          Boolean  @default(false)
+  isOli         Boolean  @default(false)
+  isBan         Boolean  @default(false)
+  isAki         Boolean  @default(false)
+  isAc          Boolean  @default(false)
+  isService     Boolean  @default(false)
+  serviceGanti  String?
+  oliNote       String?
+  catatan       String?
+  keterangan    String?
+
+  kmSebelum     Int?
+  kmSesudah     Int?
+  sebelumUrl    String?
+  sesudahUrl    String?
+  nominal       Decimal  @db.Decimal(12, 2)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("maintenances")
+}
+
+// 5. REKAP DATA BAN, OLI, DAN AKI
+model TireOilRecord {
+  id                  String    @id @default(uuid())
+  carId               String    @unique
+  car                 Car       @relation(fields: [carId], references: [id], onDelete: Cascade)
+  tempatSupir         String?
+  driver              String?
+  driverId            String?
+
+  // Kode Ban + Tanggal per posisi
+  kodeBanDKanan       String?
+  tglBanDKanan        DateTime?
+  kodeBanDKiri        String?
+  tglBanDKiri         DateTime?
+  kodeBanBKanan       String?
+  tglBanBKanan        DateTime?
+  kodeBanBKiri        String?
+  tglBanBKiri         DateTime?
+  kodeBanSerep        String?
+  tglBanSerep         DateTime?
+
+  // Perlengkapan (String untuk teks status)
+  dongkrak            String?
+  kunciRoda           String?
+
+  // Tracking KM
+  updateKm            Int?
+  updateKmTgl         DateTime?
+  kmKartuGantiOli     String?
+  tglKartuGantiOli    DateTime?
+
+  // Komponen
+  tglAki              DateTime?
+  tglWiper            DateTime?
+  tglServiceLain      DateTime?
+  serviceLain         String?
+  keterangan          String?
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@map("tire_oil_records")
+}
+
+// 6. DATA KONTRAK PT
+model Contract {
+  id              String   @id @default(uuid())
+  namaPt          String
+  transmisi       String
+  tahun           Int
+  carId           String
+  car             Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  dataYangAda     String?
+  dataSeharusnya  String?
+  periodeKontrak  String?
+  hargaSewa       Decimal  @db.Decimal(12, 2)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("contracts")
+}
+
+// 7. DATA ANGSURAN LEASING
+model CarFinancing {
+  id                   String   @id @default(uuid())
+  carId                String   @unique
+  car                  Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  kty                  String?
+  type                 String?
+  thnKend              Int?
+  blnStnk              String?
+  wrn                  String?
+  nama                 String?
+  tenor                Int?
+  angKeSisa            String?
+  awal                 DateTime?
+  akhir                DateTime?
+  noGiro               String?
+  nominal              Decimal? @db.Decimal(12, 2)
+  tanggal              Int?
+  total                Decimal? @db.Decimal(12, 2)
+  sisa                 Decimal? @db.Decimal(12, 2)
+  posisi               String?
+  hargaSewa            Decimal? @db.Decimal(12, 2)
+  periode              String?
+  supir                String?
+  group                String?
+  nominalAsuransi      Decimal? @db.Decimal(12, 2)
+  periodeAsuransi      String?
+  masaBerlakuMobil     DateTime?
+  leasang              String?
+  angsuran             Decimal? @db.Decimal(12, 2)
+  debit                Decimal? @db.Decimal(12, 2)
+  hutang               Decimal? @db.Decimal(12, 2)
+  hutangKendaraanUser  Decimal? @db.Decimal(12, 2)
+  sewa                 Decimal? @db.Decimal(12, 2)
+  gaji                 Decimal? @db.Decimal(12, 2)
+  gajiPokok            Decimal? @db.Decimal(12, 2)
+  stnk                 Decimal? @db.Decimal(12, 2)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("car_financings")
+}
+
+// 8. DATA ASURANSI MOBIL
+model CarInsurance {
+  id                    String   @id @default(uuid())
+  carId                 String   @unique
+  car                   Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  jenisMobil            String
+  transmisi             String
+  tahun                 Int
+  angsuranMobil         Decimal? @db.Decimal(12, 2)
+  jenisAsuransi         String
+  totalPremi            Decimal  @db.Decimal(12, 2)
+  nilaiTertanggung      Decimal  @db.Decimal(12, 2)
+  asuransi              String
+  periode               String?
+  limitPaDriver         Decimal? @db.Decimal(12, 2)
+  limitPaPenumpang      Decimal? @db.Decimal(12, 2)
+  limitPaPihakKetiga    Decimal? @db.Decimal(12, 2)
+  nomorPolis            String   @unique
+  premiBanjir           Decimal? @db.Decimal(12, 2)
+  nomorTelepon          String?
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@map("car_insurances")
+}
+
+// 9. LOG UANG JALAN DRIVER (UJ & OT)
+model DriverLog {
+  id              String   @id @default(uuid())
+  date            DateTime
+  day             String
+  carId           String
+  car             Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  driverId        String
+  driver          Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  transferUj      Decimal  @db.Decimal(12, 2) @default(0)
+  saldoCash       Decimal  @db.Decimal(12, 2) @default(0)
+  saldoEmoney     Decimal  @db.Decimal(12, 2) @default(0)
+  totalPerHari    Decimal  @db.Decimal(12, 2) @default(0)
+  overtime        Decimal  @db.Decimal(12, 2) @default(0)
+
+  kmAwal          Int
+  kmAkhir         Int
+  selisihKm       Int
+
+  electricity     Decimal  @db.Decimal(12, 2) @default(0)
+  parkingCash     Decimal  @db.Decimal(12, 2) @default(0)
+  sisaSaldoToll   Decimal  @db.Decimal(12, 2) @default(0)
+  parking         Decimal  @db.Decimal(12, 2) @default(0)
+  sisaSaldo       Decimal  @db.Decimal(12, 2) @default(0)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("driver_logs")
+}
+
+// 10. INVOICE RECORD & TAX ENGINE
+model Invoice {
+  id              String        @id @default(uuid())
+  date            DateTime
+  customerName    String
+  description     String
+  period          String
+  noInv           String        @unique
+  noFakturPajak   String?
+
+  dppNilaiLain    Decimal       @db.Decimal(12, 2)
+  dpp             Decimal       @db.Decimal(12, 2)
+  ujOtGaji        Decimal       @db.Decimal(12, 2) @default(0)
+  subTot          Decimal       @db.Decimal(12, 2)
+  ppn11           Decimal       @db.Decimal(12, 2)
+  pph23           Decimal       @db.Decimal(12, 2)
+  amount          Decimal       @db.Decimal(12, 2)
+
+  payment         Decimal       @db.Decimal(12, 2) @default(0)
+  outstanding     Decimal       @db.Decimal(12, 2)
+  dateOfPayment   DateTime?
+  dueDate         DateTime
+  status          InvoiceStatus @default(UNPAID)
+  reminderInv     String?
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("invoices")
+}
+
+enum InvoiceStatus {
+  PAID
+  UNPAID
+  OVERDUE
+}
+
+// 11. TILANG ETLE
+model EtleViolation {
+  id            String   @id @default(uuid())
+  carId         String
+  car           Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  tanggalTilang DateTime?
+  keterangan    String?
+  lokasi        String?
+  pelanggaran   String?
+  nominalDenda  Int?     @default(0)
+  statusBayar   String   @default("Belum Dibayar")
+  buktiUrl      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("etle_violations")
+}
